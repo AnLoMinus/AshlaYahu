@@ -1,0 +1,149 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "quadcosmos@gmail.com" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+    
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    function isValidUser() {
+      return hasOnlyAllowedFields(['uid', 'name', 'email', 'photoURL', 'role', 'lastSeen', 'isOnline']) &&
+             request.resource.data.uid is string &&
+             request.resource.data.name is string &&
+             request.resource.data.email is string &&
+             request.resource.data.role in ['admin', 'user'];
+    }
+
+    function isValidChat() {
+      return hasOnlyAllowedFields(['userId', 'title', 'createdAt', 'updatedAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.title is string &&
+             request.resource.data.title.size() <= 100 &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.updatedAt is timestamp;
+    }
+
+    function isValidMessage() {
+      return hasOnlyAllowedFields(['role', 'userId', 'content', 'createdAt']) &&
+             request.resource.data.role in ['user', 'assistant', 'system'] &&
+             (!('userId' in request.resource.data) || request.resource.data.userId == null || request.resource.data.userId is string) &&
+             request.resource.data.content is string &&
+             request.resource.data.content.size() <= 10000 &&
+             request.resource.data.createdAt is timestamp;
+    }
+
+    function isValidRoom() {
+      return hasOnlyAllowedFields(['name', 'createdBy', 'createdAt', 'participants']) &&
+             request.resource.data.name is string &&
+             request.resource.data.name.size() <= 100 &&
+             request.resource.data.createdBy is string &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.participants is list &&
+             request.resource.data.participants.size() <= 100;
+    }
+
+    function isValidExperienceComment() {
+      return hasOnlyAllowedFields(['experienceId', 'userId', 'userName', 'userPhoto', 'content', 'createdAt']) &&
+             request.resource.data.experienceId is string &&
+             request.resource.data.userId is string &&
+             request.resource.data.userName is string &&
+             request.resource.data.content is string &&
+             request.resource.data.content.size() <= 5000 &&
+             request.resource.data.createdAt is timestamp;
+    }
+
+    function isValidSubstitute() {
+      return hasOnlyAllowedFields(['experienceId', 'type', 'name', 'description', 'createdBy', 'creatorName', 'createdAt', 'upvotes']) &&
+             request.resource.data.experienceId is string &&
+             request.resource.data.type in ['plants', 'breathing', 'meditation', 'music', 'movement', 'other'] &&
+             request.resource.data.name is string &&
+             request.resource.data.name.size() <= 100 &&
+             request.resource.data.description is string &&
+             request.resource.data.description.size() <= 5000 &&
+             request.resource.data.createdBy is string &&
+             request.resource.data.creatorName is string &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.upvotes is number;
+    }
+
+    function isValidRoomMessage() {
+      return hasOnlyAllowedFields(['userId', 'userName', 'userPhoto', 'content', 'createdAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.userName is string &&
+             request.resource.data.content is string &&
+             request.resource.data.content.size() <= 10000 &&
+             request.resource.data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser() && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser() && (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidChat() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidChat() && resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() && isValidMessage() && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
+        allow update: if false; // Messages are immutable
+        allow delete: if isAuthenticated() && (get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /rooms/{roomId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidRoom() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && isValidRoom() && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.createdBy == request.auth.uid);
+      
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isValidRoomMessage();
+        allow update: if false;
+        allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      }
+    }
+
+    match /experience_comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidExperienceComment() && request.resource.data.userId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    match /substitutes/{substituteId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidSubstitute() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && isValidSubstitute() && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.upvotes is number;
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.createdBy == request.auth.uid);
+    }
+  }
+}
