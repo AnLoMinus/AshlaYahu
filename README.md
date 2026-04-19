@@ -7,6 +7,7 @@
 
 <img width="1402" height="852" alt="image" src="https://github.com/user-attachments/assets/6aa885b0-4cce-46dc-b9b0-3760178bf26b" />
 
+- קישור לאפליקציה: https://ai.studio/apps/0798a183-85a4-473a-a0b3-52bbb73ff779?fullscreenApplet=true
 ---
 
 # 🧠🎯 החזון המרכזי
