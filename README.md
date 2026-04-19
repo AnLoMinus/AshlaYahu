@@ -5,7 +5,7 @@
 
 <img width="1536" height="1024" alt="Enchanted forest of light and glow   " src="https://github.com/user-attachments/assets/b9db4e3f-9daf-4b4c-8685-9e54c3a83bef" />
 
-<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/9df84d5c-8522-4d4f-97de-3ebc037918a4" />
+<img width="1402" height="852" alt="image" src="https://github.com/user-attachments/assets/6aa885b0-4cce-46dc-b9b0-3760178bf26b" />
 
 ---
 
